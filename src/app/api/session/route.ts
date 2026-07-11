@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { supabase } from '@/lib/supabase';
+import { getLogById, getActiveLogForToday, createLog } from '@/lib/db';
 
 // GET: Check current session from cookies
 export async function GET() {
@@ -13,13 +13,9 @@ export async function GET() {
     }
 
     // Query the database for this session
-    const { data: log, error } = await supabase
-      .from('attendance_logs')
-      .select('*')
-      .eq('id', sessionId)
-      .maybeSingle();
+    const log = getLogById(sessionId);
 
-    if (error || !log) {
+    if (!log) {
       // Clear invalid cookie
       cookieStore.delete('attendance_session_id');
       return NextResponse.json({ active: false });
@@ -58,21 +54,7 @@ export async function POST(req: NextRequest) {
     const cookieStore = await cookies();
 
     // 1. Check if a row already exists for this email + today's date with status 'logged_in'
-    const { data: existingSession, error: selectError } = await supabase
-      .from('attendance_logs')
-      .select('*')
-      .eq('email', trimmedEmail)
-      .eq('date', todayUtc)
-      .eq('status', 'logged_in')
-      .maybeSingle();
-
-    if (selectError) {
-      console.error('Database query error:', selectError);
-      return NextResponse.json(
-        { error: 'Failed to verify session status' },
-        { status: 500 }
-      );
-    }
+    const existingSession = getActiveLogForToday(trimmedEmail, todayUtc);
 
     // 2. If yes: set cookie, return session and flag that they are already logged in
     if (existingSession) {
@@ -101,25 +83,12 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Create new attendance entry
-    const { data: newSession, error: insertError } = await supabase
-      .from('attendance_logs')
-      .insert({
-        name: name.trim(),
-        email: trimmedEmail,
-        login_time: new Date().toISOString(),
-        date: todayUtc,
-        status: 'logged_in',
-      })
-      .select()
-      .single();
-
-    if (insertError) {
-      console.error('Database insert error:', insertError);
-      return NextResponse.json(
-        { error: 'Failed to create login session' },
-        { status: 500 }
-      );
-    }
+    const newSession = createLog(
+      name.trim(),
+      trimmedEmail,
+      new Date().toISOString(),
+      todayUtc
+    );
 
     // 5. Set session cookie
     cookieStore.set('attendance_session_id', newSession.id, {

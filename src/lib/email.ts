@@ -1,5 +1,5 @@
 import { Resend } from 'resend';
-import { AttendanceLog } from './supabase';
+import { AttendanceLog } from './db';
 
 const resendApiKey = process.env.RESEND_API_KEY || '';
 const bossEmail = process.env.BOSS_EMAIL || '';

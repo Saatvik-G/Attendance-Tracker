@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { supabase } from '@/lib/supabase';
+import { getLogById, updateLogToLoggedOut, getLogsForDate } from '@/lib/db';
 import { sendAttendanceReport } from '@/lib/email';
 
 export async function POST() {
@@ -16,13 +16,9 @@ export async function POST() {
     }
 
     // 1. Fetch current session log
-    const { data: log, error: fetchError } = await supabase
-      .from('attendance_logs')
-      .select('*')
-      .eq('id', sessionId)
-      .maybeSingle();
+    const log = getLogById(sessionId);
 
-    if (fetchError || !log) {
+    if (!log) {
       // Clear invalid cookie anyway
       cookieStore.delete('attendance_session_id');
       return NextResponse.json(
@@ -39,19 +35,10 @@ export async function POST() {
 
     const logoutTime = new Date().toISOString();
 
-    // 3. Update status and logout time in Supabase
-    const { data: updatedLog, error: updateError } = await supabase
-      .from('attendance_logs')
-      .update({
-        logout_time: logoutTime,
-        status: 'logged_out',
-      })
-      .eq('id', sessionId)
-      .select()
-      .single();
+    // 3. Update status and logout time in SQLite
+    const updatedLog = updateLogToLoggedOut(sessionId, logoutTime);
 
-    if (updateError) {
-      console.error('Database update error on logout:', updateError);
+    if (!updatedLog) {
       return NextResponse.json(
         { error: 'Failed to update logout status' },
         { status: 500 }
@@ -62,18 +49,15 @@ export async function POST() {
     cookieStore.delete('attendance_session_id');
 
     // 4. Trigger Email Report for today's logs
-    const todayUtc = log.date; // Use the date stored in the row (which is today's date in UTC)
+    const todayUtc = log.date;
 
     // Fetch all logs for today
-    const { data: todayLogs, error: logsError } = await supabase
-      .from('attendance_logs')
-      .select('*')
-      .eq('date', todayUtc);
+    const todayLogs = getLogsForDate(todayUtc);
 
     let emailSent = false;
     let emailError = null;
 
-    if (!logsError && todayLogs) {
+    if (todayLogs) {
       const emailResult = await sendAttendanceReport({
         logs: todayLogs,
         date: todayUtc,
@@ -82,8 +66,6 @@ export async function POST() {
       });
       emailSent = emailResult.success;
       emailError = emailResult.error || null;
-    } else {
-      console.error('Failed to fetch today\'s logs for email report:', logsError);
     }
 
     return NextResponse.json({

@@ -1,31 +1,13 @@
 import { NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase';
+import { getLogsForDate } from '@/lib/db';
 import { sendAttendanceReport } from '@/lib/email';
 
 export async function POST() {
   try {
     const todayUtc = new Date().toISOString().split('T')[0];
 
-    // Fetch all logs for today
-    const { data: todayLogs, error: logsError } = await supabase
-      .from('attendance_logs')
-      .select('*')
-      .eq('date', todayUtc);
-
-    if (logsError) {
-      console.error('Database query error on manual report send:', logsError);
-      return NextResponse.json(
-        { error: 'Failed to fetch today\'s attendance logs' },
-        { status: 500 }
-      );
-    }
-
-    if (!todayLogs) {
-      return NextResponse.json(
-        { error: 'No logs found' },
-        { status: 404 }
-      );
-    }
+    // Fetch all logs for today from SQLite
+    const todayLogs = getLogsForDate(todayUtc);
 
     // Trigger Email Report manually
     const emailResult = await sendAttendanceReport({

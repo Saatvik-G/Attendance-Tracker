@@ -1,6 +1,8 @@
-# Attendance Tracker
+# Attendance Tracker (SQLite Version)
 
-A clean, minimal, and professional full-stack web application for internal staff attendance tracking. Built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS**, **Supabase (PostgreSQL)**, and **Resend** for transactional email reporting.
+A clean, minimal, and professional full-stack web application for internal staff attendance tracking. Built with **Next.js 16 (App Router)**, **TypeScript**, **Tailwind CSS**, and **Resend** for transactional email reporting.
+
+This version uses a **local SQLite database** (`attendance.db`), making it 100% self-contained and requiring **zero cloud database configuration** (no Supabase setup required!).
 
 ---
 
@@ -8,9 +10,8 @@ A clean, minimal, and professional full-stack web application for internal staff
 - **Framework**: Next.js 16 (App Router) & React 19
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS (v4)
-- **Database**: Supabase (Postgres)
+- **Database**: SQLite (Local-first, managed via `better-sqlite3`)
 - **Email Delivery**: Resend (Transactional Email API)
-- **Deployment**: Vercel
 
 ---
 
@@ -24,38 +25,8 @@ A clean, minimal, and professional full-stack web application for internal staff
 
 ---
 
-## Database Schema (Supabase)
-
-To set up the database table, run the following SQL script in your Supabase project's **SQL Editor**:
-
-```sql
--- Create the attendance_logs table
-CREATE TABLE attendance_logs (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    name TEXT NOT NULL,
-    email TEXT NOT NULL,
-    login_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    logout_time TIMESTAMPTZ,
-    date DATE NOT NULL DEFAULT CURRENT_DATE,
-    status TEXT NOT NULL DEFAULT 'logged_in' CHECK (status IN ('logged_in', 'logged_out'))
-);
-
--- Index for date column since queries filter by today's date
-CREATE INDEX idx_attendance_logs_date ON attendance_logs (date);
-
--- Enable Row Level Security (RLS)
-ALTER TABLE attendance_logs ENABLE ROW LEVEL SECURITY;
-
--- Simple public policies allowing tracking without user accounts
-CREATE POLICY "Allow public select" ON attendance_logs FOR SELECT USING (true);
-CREATE POLICY "Allow public insert" ON attendance_logs FOR INSERT WITH CHECK (true);
-CREATE POLICY "Allow public update" ON attendance_logs FOR UPDATE USING (true);
-```
-
----
-
 ## Timezone Architecture
-- **Database**: All timestamps (`login_time`, `logout_time`, `date`) are stored in **UTC** inside Supabase to maintain server-side consistency.
+- **Database**: All timestamps (`login_time`, `logout_time`, `date`) are stored in **UTC** inside SQLite to maintain consistency.
 - **Client UI**: To avoid React hydration mismatch issues, times are formatted dynamically on the browser client-side using `Intl.DateTimeFormat` to show in the user's local browser timezone.
 - **Email Reports**: Since email generation happens asynchronously on the server, dates are formatted to **Asia/Kolkata** (IST) timezone (with clear code comments) to ensure the recipient receives standard India local times.
 
@@ -71,14 +42,10 @@ npm install
 ```
 
 ### 2. Configure Environment Variables
-Create a `.env.local` file in the root directory (based on `.env.example`) and fill in your credentials:
+Create a `.env.local` file in the root directory (based on `.env.example`) and fill in your Resend credentials:
 
 ```env
-# Supabase keys (Find in Supabase settings -> API)
-NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-
-# Resend API configuration (Create key at resend.com)
+# Resend API configuration (Create key at https://resend.com)
 RESEND_API_KEY=re_your_api_key
 
 # Destination email for daily attendance reports (e.g. your email or Boss's email)
@@ -89,7 +56,18 @@ BOSS_EMAIL=boss@example.com
 ```bash
 npm run dev
 ```
-Open [http://localhost:3000](http://localhost:3000) in your browser to view the application.
+Open [http://localhost:3000](http://localhost:3000) in your browser to view the application. The application will **automatically create** the local database file `attendance.db` in your root folder and set up all required tables.
+
+---
+
+## Deployment to Vercel (Important Node)
+
+> [!IMPORTANT]
+> **Ephemeral Storage Limitation**:
+> Since Vercel deployments run on serverless functions, the local SQLite file system is **ephemeral**. This means any check-in logs saved to `attendance.db` will disappear when the serverless function spins down or restarts.
+> 
+> * **For Local Runs / Demos**: SQLite is completely permanent and runs perfectly.
+> * **For Production Deployments**: If you need to deploy this to Vercel for actual production usage, it is recommended to connect Vercel Postgres (Neon) or Supabase.
 
 ---
 
