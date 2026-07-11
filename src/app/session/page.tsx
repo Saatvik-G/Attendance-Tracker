@@ -162,7 +162,7 @@ export default function SessionPage() {
             )}
           </button>
           <p className="mt-3 text-center text-xs text-slate-400">
-            Logging out will end your session and email today&apos;s attendance report to HR.
+            Logging out will end your session and a report will be sent.
           </p>
         </div>
       </div>
