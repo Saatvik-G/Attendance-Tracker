@@ -12,8 +12,8 @@ export async function GET() {
       return NextResponse.json({ active: false });
     }
 
-    // Query the database for this session
-    const log = getLogById(sessionId);
+    // Query the database for this session (awaited for hybrid adapter)
+    const log = await getLogById(sessionId);
 
     if (!log) {
       // Clear invalid cookie
@@ -53,10 +53,10 @@ export async function POST(req: NextRequest) {
     const todayUtc = new Date().toISOString().split('T')[0];
     const cookieStore = await cookies();
 
-    // 1. Check if a row already exists for this email + today's date with status 'logged_in'
-    const existingSession = getActiveLogForToday(trimmedEmail, todayUtc);
+    // Check if a row already exists for this email + today's date with status 'logged_in' (awaited)
+    const existingSession = await getActiveLogForToday(trimmedEmail, todayUtc);
 
-    // 2. If yes: set cookie, return session and flag that they are already logged in
+    // If yes: set cookie, return session and flag that they are already logged in
     if (existingSession) {
       cookieStore.set('attendance_session_id', existingSession.id, {
         httpOnly: true,
@@ -74,7 +74,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. If no: require Name for first check-in
+    // If no: require Name for first check-in
     if (!name || !name.trim()) {
       return NextResponse.json(
         { error: 'Name is required to log in for the first time today' },
@@ -82,15 +82,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 4. Create new attendance entry
-    const newSession = createLog(
+    // Create new attendance entry (awaited)
+    const newSession = await createLog(
       name.trim(),
       trimmedEmail,
       new Date().toISOString(),
       todayUtc
     );
 
-    // 5. Set session cookie
+    // Set session cookie
     cookieStore.set('attendance_session_id', newSession.id, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',

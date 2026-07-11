@@ -15,8 +15,8 @@ export async function POST() {
       );
     }
 
-    // 1. Fetch current session log
-    const log = getLogById(sessionId);
+    // 1. Fetch current session log (awaited for hybrid adapter)
+    const log = await getLogById(sessionId);
 
     if (!log) {
       // Clear invalid cookie anyway
@@ -35,8 +35,8 @@ export async function POST() {
 
     const logoutTime = new Date().toISOString();
 
-    // 3. Update status and logout time in SQLite
-    const updatedLog = updateLogToLoggedOut(sessionId, logoutTime);
+    // 3. Update status and logout time in DB (awaited)
+    const updatedLog = await updateLogToLoggedOut(sessionId, logoutTime);
 
     if (!updatedLog) {
       return NextResponse.json(
@@ -51,8 +51,8 @@ export async function POST() {
     // 4. Trigger Email Report for today's logs
     const todayUtc = log.date;
 
-    // Fetch all logs for today
-    const todayLogs = getLogsForDate(todayUtc);
+    // Fetch all logs for today (awaited)
+    const todayLogs = await getLogsForDate(todayUtc);
 
     let emailSent = false;
     let emailError = null;

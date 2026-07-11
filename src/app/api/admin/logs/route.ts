@@ -8,8 +8,8 @@ export async function GET() {
   try {
     const todayUtc = new Date().toISOString().split('T')[0];
 
-    // Fetch logs for today (sorted by login_time ascending in helper)
-    const logs = getLogsForDate(todayUtc);
+    // Fetch logs for today (awaited for hybrid adapter)
+    const logs = await getLogsForDate(todayUtc);
 
     return NextResponse.json({ success: true, logs });
   } catch (error: any) {

@@ -6,8 +6,8 @@ export async function POST() {
   try {
     const todayUtc = new Date().toISOString().split('T')[0];
 
-    // Fetch all logs for today from SQLite
-    const todayLogs = getLogsForDate(todayUtc);
+    // Fetch all logs for today from DB (awaited)
+    const todayLogs = await getLogsForDate(todayUtc);
 
     // Trigger Email Report manually
     const emailResult = await sendAttendanceReport({
