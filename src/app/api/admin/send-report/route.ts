@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server';
 import { getLogsForDate } from '@/lib/db';
 import { sendAttendanceReport } from '@/lib/email';
+import { verifyAdminSession } from '@/lib/auth';
 
 export async function POST() {
   try {
+    // Protect API endpoint
+    const isAuthenticated = await verifyAdminSession();
+    if (!isAuthenticated) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const todayUtc = new Date().toISOString().split('T')[0];
 
-    // Fetch all logs for today from DB (awaited)
+    // Fetch all logs for today from DB
     const todayLogs = await getLogsForDate(todayUtc);
 
     // Trigger Email Report manually

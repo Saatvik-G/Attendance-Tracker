@@ -10,7 +10,10 @@ import {
   Clock, 
   AlertCircle, 
   MailCheck,
-  ChevronLeft
+  ChevronLeft,
+  Lock,
+  Unlock,
+  LogOut
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -25,12 +28,75 @@ interface AttendanceLog {
 }
 
 export default function AdminPage() {
+  const [authenticated, setAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sendingReport, setSendingReport] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Check if admin session is active on mount
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/admin/verify');
+        const data = await res.json();
+        if (data.authenticated) {
+          setAuthenticated(true);
+          await fetchLogs(false);
+        }
+      } catch (err) {
+        console.error('Failed to verify admin status:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    checkAuth();
+  }, []);
+
+  const handleAdminLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!password) return;
+
+    setLoggingIn(true);
+    setLoginError(null);
+
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Login failed');
+      }
+
+      setAuthenticated(true);
+      await fetchLogs(false);
+    } catch (err: any) {
+      setLoginError(err.message || 'Incorrect password.');
+    } finally {
+      setLoggingIn(false);
+    }
+  };
+
+  const handleAdminLogout = async () => {
+    try {
+      await fetch('/api/admin/logout', { method: 'POST' });
+      setAuthenticated(false);
+      setPassword('');
+      setLogs([]);
+    } catch (err) {
+      console.error('Logout error:', err);
+    }
+  };
 
   const fetchLogs = async (isSilent = false) => {
     if (!isSilent) setLoading(true);
@@ -51,10 +117,6 @@ export default function AdminPage() {
       setRefreshing(false);
     }
   };
-
-  useEffect(() => {
-    fetchLogs();
-  }, []);
 
   const handleSendReport = async () => {
     setSendingReport(true);
@@ -112,6 +174,91 @@ export default function AdminPage() {
     }
   };
 
+  if (loading && !authenticated) {
+    return (
+      <div className="flex min-h-screen flex-1 flex-col items-center justify-center bg-slate-50">
+        <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+        <p className="mt-2 text-sm text-slate-500 font-medium">Verifying admin session...</p>
+      </div>
+    );
+  }
+
+  // Render Login Card if not authenticated
+  if (!authenticated) {
+    return (
+      <div className="flex min-h-screen flex-1 flex-col items-center justify-center bg-slate-50 px-6 py-12">
+        <div className="w-full max-w-[400px] bg-white p-8 rounded-xl border border-slate-200 shadow-sm">
+          <div className="text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100 text-slate-600">
+              <Lock className="h-6 w-6" />
+            </div>
+            <h2 className="mt-4 text-2xl font-bold tracking-tight text-slate-900">
+              Admin Access
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Enter password to unlock the logs dashboard
+            </p>
+          </div>
+
+          <form className="mt-8 space-y-6" onSubmit={handleAdminLogin}>
+            <div>
+              <label htmlFor="admin-password" className="block text-sm font-semibold text-slate-700">
+                Admin Password
+              </label>
+              <div className="mt-2">
+                <input
+                  id="admin-password"
+                  name="password"
+                  type="password"
+                  required
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={loggingIn}
+                  className="block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:border-indigo-600 focus:outline-none focus:ring-1 focus:ring-indigo-600 disabled:bg-slate-100 disabled:text-slate-400 sm:text-sm"
+                />
+              </div>
+            </div>
+
+            {loginError && (
+              <div className="flex items-center gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700 border border-red-200">
+                <AlertCircle className="h-5 w-5 shrink-0 text-red-500" />
+                <span className="font-medium">{loginError}</span>
+              </div>
+            )}
+
+            <div>
+              <button
+                type="submit"
+                disabled={loggingIn || !password}
+                className="flex w-full items-center justify-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-500 disabled:opacity-50 transition"
+              >
+                {loggingIn ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Unlocking...
+                  </>
+                ) : (
+                  <>
+                    <Unlock className="h-4 w-4" />
+                    Unlock Dashboard
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+          
+          <div className="mt-6 text-center">
+            <Link href="/" className="text-xs text-slate-400 hover:text-indigo-600 transition flex items-center justify-center gap-1">
+              <ChevronLeft className="h-3 w-3" /> Back to Portal
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Render Dashboard if authenticated
   return (
     <div className="flex-1 bg-slate-50 min-h-screen py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -157,6 +304,16 @@ export default function AdminPage() {
                   Send Report Now
                 </>
               )}
+            </button>
+            
+            {/* Admin Logout Button */}
+            <button
+              onClick={handleAdminLogout}
+              className="inline-flex items-center gap-2 rounded-md bg-slate-200 hover:bg-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition"
+              title="Log out from admin"
+            >
+              <LogOut className="h-4 w-4" />
+              Lock
             </button>
           </div>
         </div>
