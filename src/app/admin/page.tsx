@@ -13,7 +13,8 @@ import {
   ChevronLeft,
   Lock,
   Unlock,
-  LogOut
+  LogOut,
+  Calendar
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -33,6 +34,16 @@ export default function AdminPage() {
   const [loggingIn, setLoggingIn] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
+  // Initialize selectedDate with local date string in YYYY-MM-DD format
+  const getLocalTodayString = () => {
+    const today = new Date();
+    const yyyy = today.getFullYear();
+    const mm = String(today.getMonth() + 1).padStart(2, '0');
+    const dd = String(today.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  };
+
+  const [selectedDate, setSelectedDate] = useState(getLocalTodayString());
   const [logs, setLogs] = useState<AttendanceLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -48,7 +59,7 @@ export default function AdminPage() {
         const data = await res.json();
         if (data.authenticated) {
           setAuthenticated(true);
-          await fetchLogs(false);
+          await fetchLogs(false, selectedDate);
         }
       } catch (err) {
         console.error('Failed to verify admin status:', err);
@@ -79,7 +90,7 @@ export default function AdminPage() {
       }
 
       setAuthenticated(true);
-      await fetchLogs(false);
+      await fetchLogs(false, selectedDate);
     } catch (err: any) {
       setLoginError(err.message || 'Incorrect password.');
     } finally {
@@ -98,13 +109,13 @@ export default function AdminPage() {
     }
   };
 
-  const fetchLogs = async (isSilent = false) => {
+  const fetchLogs = async (isSilent = false, dateStr = selectedDate) => {
     if (!isSilent) setLoading(true);
     else setRefreshing(true);
     
     setErrorMessage(null);
     try {
-      const res = await fetch('/api/admin/logs');
+      const res = await fetch(`/api/admin/logs?date=${dateStr}`);
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error || 'Failed to fetch attendance logs');
@@ -118,6 +129,11 @@ export default function AdminPage() {
     }
   };
 
+  const handleDateChange = (newDate: string) => {
+    setSelectedDate(newDate);
+    fetchLogs(false, newDate);
+  };
+
   const handleSendReport = async () => {
     setSendingReport(true);
     setErrorMessage(null);
@@ -126,6 +142,8 @@ export default function AdminPage() {
     try {
       const res = await fetch('/api/admin/send-report', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date: selectedDate }),
       });
       const data = await res.json();
 
@@ -134,7 +152,7 @@ export default function AdminPage() {
       }
 
       if (data.success) {
-        setSuccessMessage(`Attendance report successfully sent to boss! (${data.count} entries included)`);
+        setSuccessMessage(`Attendance report for ${formatSelectedDate()} successfully sent to boss! (${data.count} entries included)`);
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'An error occurred while sending report.');
@@ -163,14 +181,16 @@ export default function AdminPage() {
   const activeCount = logs.filter((log) => log.status === 'logged_in').length;
   const loggedOutCount = totalEmployees - activeCount;
 
-  // Today's Date display formatted locally
-  const getTodayFormatted = () => {
+  // Format selected date nicely
+  const formatSelectedDate = () => {
     try {
+      const parts = selectedDate.split('-');
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
       return new Intl.DateTimeFormat(undefined, {
         dateStyle: 'full',
-      }).format(new Date());
+      }).format(d);
     } catch (e) {
-      return new Date().toLocaleDateString();
+      return selectedDate;
     }
   };
 
@@ -264,7 +284,7 @@ export default function AdminPage() {
       <div className="max-w-6xl mx-auto space-y-6">
         
         {/* Navigation / Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 pb-4 border-b border-slate-200">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 pb-4 border-b border-slate-200">
           <div>
             <div className="flex items-center gap-2 text-sm text-slate-500 mb-1 hover:text-indigo-600 transition">
               <ChevronLeft className="h-4 w-4" />
@@ -273,12 +293,25 @@ export default function AdminPage() {
             <h1 className="text-3xl font-bold tracking-tight text-slate-900">
               Admin Dashboard
             </h1>
-            <p className="mt-1 text-sm text-slate-500">
-              {getTodayFormatted()}
+            <p className="mt-1 text-sm text-indigo-600 font-medium flex items-center gap-1">
+              <Calendar className="h-4 w-4" />
+              {formatSelectedDate()}
             </p>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Date Picker */}
+            <div className="flex items-center gap-2 bg-white border border-slate-300 rounded-md px-3 py-1.5 shadow-sm">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Date:</span>
+              <input 
+                type="date"
+                value={selectedDate}
+                onChange={(e) => handleDateChange(e.target.value)}
+                disabled={loading || refreshing || sendingReport}
+                className="text-sm font-semibold text-slate-700 bg-transparent border-none outline-none focus:ring-0 cursor-pointer"
+              />
+            </div>
+
             <button
               onClick={() => fetchLogs(true)}
               disabled={loading || refreshing || sendingReport}
@@ -301,7 +334,7 @@ export default function AdminPage() {
               ) : (
                 <>
                   <Send className="h-4 w-4" />
-                  Send Report Now
+                  Send Report
                 </>
               )}
             </button>
@@ -332,7 +365,7 @@ export default function AdminPage() {
           <div className="flex items-start gap-2.5 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-800 border border-emerald-200">
             <MailCheck className="h-5 w-5 shrink-0 text-emerald-600 mt-0.5" />
             <div>
-              <span className="font-semibold">Success!</span> {successMessage}
+              <span className="font-semibold">Success:</span> {successMessage}
             </div>
           </div>
         )}
@@ -375,14 +408,14 @@ export default function AdminPage() {
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20">
               <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
-              <p className="mt-2 text-sm text-slate-500">Loading today&apos;s logs...</p>
+              <p className="mt-2 text-sm text-slate-500">Loading logs...</p>
             </div>
           ) : logs.length === 0 ? (
             <div className="text-center py-20 px-4">
               <Users className="mx-auto h-12 w-12 text-slate-300" />
-              <h3 className="mt-2 text-sm font-semibold text-slate-900">No activity logged yet</h3>
+              <h3 className="mt-2 text-sm font-semibold text-slate-900">No activity logged</h3>
               <p className="mt-1 text-xs text-slate-500">
-                Staff check-ins for today will show up here.
+                Staff check-ins for this date will show up here.
               </p>
             </div>
           ) : (

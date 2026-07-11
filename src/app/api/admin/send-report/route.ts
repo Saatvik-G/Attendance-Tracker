@@ -1,9 +1,9 @@
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 import { getLogsForDate } from '@/lib/db';
 import { sendAttendanceReport } from '@/lib/email';
 import { verifyAdminSession } from '@/lib/auth';
 
-export async function POST() {
+export async function POST(req: NextRequest) {
   try {
     // Protect API endpoint
     const isAuthenticated = await verifyAdminSession();
@@ -11,15 +11,23 @@ export async function POST() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const todayUtc = new Date().toISOString().split('T')[0];
+    // Parse the target date from body (if provided)
+    let body = { date: '' };
+    try {
+      body = await req.json();
+    } catch (e) {
+      // Body might be empty, ignore parsing error
+    }
+    
+    const targetDate = body.date || new Date().toISOString().split('T')[0];
 
-    // Fetch all logs for today from DB
-    const todayLogs = await getLogsForDate(todayUtc);
+    // Fetch all logs for target date from DB
+    const targetLogs = await getLogsForDate(targetDate);
 
-    // Trigger Email Report manually
+    // Trigger Email Report manually for the selected date
     const emailResult = await sendAttendanceReport({
-      logs: todayLogs,
-      date: todayUtc,
+      logs: targetLogs,
+      date: targetDate,
       triggerType: 'manual',
     });
 
@@ -34,7 +42,7 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       emailSent: true,
-      count: todayLogs.length,
+      count: targetLogs.length,
     });
   } catch (error: any) {
     console.error('Admin send-report POST route error:', error);
