@@ -14,7 +14,8 @@ import {
   Lock,
   Unlock,
   LogOut,
-  Calendar
+  Calendar,
+  Trash2
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -48,6 +49,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [sendingReport, setSendingReport] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -158,6 +160,36 @@ export default function AdminPage() {
       setErrorMessage(err.message || 'An error occurred while sending report.');
     } finally {
       setSendingReport(false);
+    }
+  };
+
+  const handleDeleteLog = async (id: string, name: string) => {
+    if (!confirm(`Are you sure you want to delete the check-in entry for ${name}?`)) {
+      return;
+    }
+
+    setDeletingId(id);
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    try {
+      const res = await fetch('/api/admin/logs', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete log entry');
+      }
+
+      setSuccessMessage(`Successfully deleted entry for ${name}.`);
+      await fetchLogs(true);
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to delete entry. Please try again.');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -307,14 +339,14 @@ export default function AdminPage() {
                 type="date"
                 value={selectedDate}
                 onChange={(e) => handleDateChange(e.target.value)}
-                disabled={loading || refreshing || sendingReport}
+                disabled={loading || refreshing || sendingReport || deletingId !== null}
                 className="text-sm font-semibold text-slate-700 bg-transparent border-none outline-none focus:ring-0 cursor-pointer"
               />
             </div>
 
             <button
               onClick={() => fetchLogs(true)}
-              disabled={loading || refreshing || sendingReport}
+              disabled={loading || refreshing || sendingReport || deletingId !== null}
               className="inline-flex items-center gap-2 rounded-md bg-white border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:opacity-50 transition"
               title="Refresh attendance table"
             >
@@ -323,13 +355,13 @@ export default function AdminPage() {
             </button>
             <button
               onClick={handleSendReport}
-              disabled={loading || refreshing || sendingReport}
+              disabled={loading || refreshing || sendingReport || deletingId !== null}
               className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow hover:bg-indigo-500 disabled:opacity-50 transition"
             >
               {sendingReport ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Sending Report...
+                  Sending...
                 </>
               ) : (
                 <>
@@ -438,11 +470,15 @@ export default function AdminPage() {
                     <th className="px-6 py-3.5 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">
                       Status
                     </th>
+                    <th className="px-6 py-3.5 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-200 bg-white">
                   {logs.map((log, idx) => {
                     const isLoggedOut = log.status === 'logged_out';
+                    const isDeleting = deletingId === log.id;
                     return (
                       <tr 
                         key={log.id} 
@@ -474,6 +510,26 @@ export default function AdminPage() {
                               Still Logged In
                             </span>
                           )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <button
+                            onClick={() => handleDeleteLog(log.id, log.name)}
+                            disabled={deletingId !== null}
+                            className="text-rose-600 hover:text-rose-900 font-semibold disabled:opacity-50 inline-flex items-center gap-1 cursor-pointer transition"
+                            title={`Delete log for ${log.name}`}
+                          >
+                            {isDeleting ? (
+                              <>
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                                Deleting...
+                              </>
+                            ) : (
+                              <>
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Delete
+                              </>
+                            )}
+                          </button>
                         </td>
                       </tr>
                     );

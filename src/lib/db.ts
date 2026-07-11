@@ -179,3 +179,20 @@ export async function getLogsForDate(date: string): Promise<AttendanceLog[]> {
     return [];
   }
 }
+
+/**
+ * Deletes a log entry by its unique ID.
+ */
+export async function deleteLog(id: string): Promise<boolean> {
+  try {
+    if (isProduction) {
+      await pgClient`DELETE FROM attendance_logs WHERE id = ${id}`;
+    } else {
+      sqliteDb.prepare('DELETE FROM attendance_logs WHERE id = ?').run(id);
+    }
+    return true;
+  } catch (error) {
+    console.error('Error in deleteLog:', error);
+    return false;
+  }
+}
