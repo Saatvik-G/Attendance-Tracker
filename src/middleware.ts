@@ -28,7 +28,7 @@ export function middleware(request: NextRequest) {
     // Compare the client IP with the allowed office IP
     if (clientIp !== allowedIp) {
       return new NextResponse(
-        'Access denied: this app can only be used from the office network.',
+        `Access denied: this app can only be used from the office network. (Your IP: ${clientIp})`,
         {
           status: 403,
           headers: {
