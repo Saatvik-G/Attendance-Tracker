@@ -25,8 +25,28 @@ export function middleware(request: NextRequest) {
       clientIp = (request as any).ip || '';
     }
 
-    // Compare the client IP with the allowed office IP
-    if (clientIp !== allowedIp) {
+    // Split allowedIp by comma to support multiple allowed entries or subnets
+    const allowedIps = allowedIp.split(',').map((ip) => ip.trim());
+
+    // Check if the client IP matches any of the allowed entries or prefix wildcards
+    const isAllowed = allowedIps.some((allowed) => {
+      // Support wildcards (e.g., "122.173.28.*")
+      if (allowed.endsWith('*')) {
+        const prefix = allowed.slice(0, -1); // Remove the '*'
+        return clientIp.startsWith(prefix);
+      }
+      
+      // Support trailing dot matching (e.g., "122.173.28.")
+      if (allowed.endsWith('.')) {
+        return clientIp.startsWith(allowed);
+      }
+
+      // Exact match
+      return clientIp === allowed;
+    });
+
+    // Block if the client IP is not in the allowed list/wildcards
+    if (!isAllowed) {
       return new NextResponse(
         `Access denied: this app can only be used from the office network. (Your IP: ${clientIp})`,
         {
